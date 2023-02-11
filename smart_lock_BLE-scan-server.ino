@@ -1,5 +1,8 @@
 /*
    Smart Lock PoC: Lock and unlock based on smartphone or smartwatch proximity.
+   
+   THIS IS NOT READY YET! WORK IN PROGRESS...
+   
    The BLE Server implementation and the BLE Scanner implementation was based on Neil Kolban examples.
 */
 
