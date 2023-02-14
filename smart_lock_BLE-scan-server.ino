@@ -105,6 +105,7 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
           device_found = false;
       }
       Serial.printf("Advertised Device: %s RSSI: %d \n", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getRSSI() );
+      Serial.println(advertisedDevice.toString().c_str()); //debug only
     }
 };
 
@@ -249,19 +250,19 @@ void loop() {
 //SCAN  control loops
   BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
   
-  for (int i = 0; i < foundDevices.getCount(); i++) {
-    BLEAdvertisedDevice device = foundDevices.getDevice(i);
+  //for (int i = 0; i < foundDevices.getCount(); i++) {
+  //  BLEAdvertisedDevice device = foundDevices.getDevice(i);
 
     //Proceed Unlocking
     if (/*rssi > RSSI_THRESHOLD &&*/ device_found == true && locked && doorClosed())   {
-      proceedLocking();
-      break;   
+      proceedUnlocking();
+      //break;   
     }
-  }
+  //}
   
   //Proceed Locking
   if (!device_found && !locked && doorClosed()) {
-    proceedUnlocking();
+    proceedLocking();
   }
   delay(2000);
   pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
