@@ -1,9 +1,18 @@
+
+
 /*
    Smart Lock PoC: Lock and unlock based on smartphone or smartwatch proximity.
    Developed by Carlos Alberto Meier Basso
    The BLE Server implementation and the BLE Scanner implementation was based on Neil Kolban examples adapted to ESP32 by Evandro Copercini.
-*/
 
+   GPIO Map:
+    4 : Turns on a led to indicate the door is locked
+    12: A button to lock or unlock the door from inside
+    14: A button to add a new key device (that must be connected on the BLE Server)
+    17: solenoid control - to use solenoid mechanism, the var useSolenoid must be true; 
+    18: servo control (yellow) - to use a servo, the var useServo must be true;
+    25 or LED_BUILTIN - turns on a LED when a key device is in the unlock area
+*/
 
 #include <BLEDevice.h>
 #include <BLEUtils.h>
@@ -15,7 +24,7 @@
 #include <ESP32Servo.h> 
 int servoPin = 18; //GPIO to attach servo control 
 Servo myservo;  // create servo object to control a servo
-const bool useServo = false; //if using a servo to lock or unlock
+const bool useServo = true; //if using a servo to lock or unlock
 int solenoidPin = 17; //GPIO to attach solenoid control 
 const bool useSolenoid = true; //if using a solenoid to lock or unlock
 
@@ -27,6 +36,7 @@ const bool useSolenoid = true; //if using a solenoid to lock or unlock
 bool deviceConnected = false;
 char remoteAddress[18];
 
+
 //scan definitions and vars
 const int MAX_KEYS = 3;
 String knownBLEAddresses[MAX_KEYS] = {"77:a1:20:82:0a:4f", "", ""};
@@ -36,15 +46,16 @@ int scanTime = 5; //In seconds
 BLEScan* pBLEScan;
 
 //periferrals definitions and vars
-const int buttonPin = 14;
-const int ledPin = 4; //LED that show if door is locked
+const int addKeyButtonPin = 14;
+const int lockButtonPin = 12;
+const int ledPin = 4; //show if door is locked
 int buttonState = 0;
 const bool useHall = false; //if using hall sensor to verify if the door is closed, use "true"
 bool locked = false; //status if the door is locked or not
 
-//server calback 
+// calback do server
 //Setup callbacks onConnect and onDisconnect
-class MyServerCallbacks: public BLEServerCallbacks { //if more info needes, visit: https://randomnerdtutorials.com/esp32-ble-server-client/
+class MyServerCallbacks: public BLEServerCallbacks { 
 	void onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) {
 
 		//char remoteAddress[18];
@@ -74,7 +85,8 @@ class MyServerCallbacks: public BLEServerCallbacks { //if more info needes, visi
 //callback do scan
 class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice) {
-      for (int i = 0; i < (sizeof(knownBLEAddresses) / sizeof(knownBLEAddresses[0])); i++) {
+      for (int i = 0; i < (sizeof(knownBLEAddresses) / sizeof(knownBLEAddresses[0])); i++)
+      {
         //Uncomment to Enable Debug Information
         //Serial.println("*************Start**************");
         //Serial.println(sizeof(knownBLEAddresses));
@@ -83,7 +95,8 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
         //Serial.println(advertisedDevice.getAddress().toString().c_str());
         //Serial.println(knownBLEAddresses[i].c_str());
         //Serial.println("*************End**************");
-        if (strcmp(advertisedDevice.getAddress().toString().c_str(), knownBLEAddresses[i].c_str()) == 0) {
+        if (strcmp(advertisedDevice.getAddress().toString().c_str(), knownBLEAddresses[i].c_str()) == 0)
+        {
           device_found = true;
           Serial.println("Dispositivo chave detectado!");
           break;
@@ -99,7 +112,7 @@ void addKey() { //adds a new key to the keys array
   bool added = false;
   for (int i = 0; i < MAX_KEYS; i++) {  
     if (!added && knownBLEAddresses[i].c_str() == "") {
-       knownBLEAddresses[i] = remoteAddress; 
+       knownBLEAddresses[i] = remoteAddress; // <<<<<<<<converter para string????
        added=true;
     }
     else if (knownBLEAddresses[i].c_str() == remoteAddress) {
@@ -126,14 +139,16 @@ bool doorClosed() { //verify if the Hall sensor should be used and verify if the
   return true; //if not considering Hall sensor, returns true, as the door is closed.
 }
 
-void lockByServo() { //lock the door using a servo
+void unlockByServo() { //unlock the door using a servo
+  Serial.println("Unlocking by servo");
   for (int pos = 0; pos <= 180; pos += 1) {
     // in steps of 1 degree
     myservo.write(pos);
     delay(15); // waits 15ms to reach the position
   }
 }
-void unlockByServo() { //unlock the door using a servo
+void lockByServo() { //lock the door using a servo
+  Serial.println("Locking by servo");
   for (int pos = 180; pos >= 0; pos -= 1) {
     myservo.write(pos);
     delay(15); // waits 15ms to reach the position
@@ -145,8 +160,8 @@ void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(ledPin, OUTPUT);
-  pinMode(buttonPin, INPUT);
-  pinMode(solenoidPin, OUTPUT);
+  pinMode(addKeyButtonPin, INPUT);
+  pinMode(lockButtonPin, INPUT);
 
 /////server
   //create BLE device
@@ -162,7 +177,7 @@ void setup() {
                                          BLECharacteristic::PROPERTY_WRITE
                                        );
 
-  pCharacteristic->setValue("Characteristic");
+  pCharacteristic->setValue("Characteristic value...");
   //start service and advertising 
   pService->start();
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
@@ -171,6 +186,7 @@ void setup() {
   pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
   pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
+
 
 /////scanner
   Serial.println("Scanning...");
@@ -187,14 +203,46 @@ void setup() {
   myservo.attach(servoPin, 500, 2400);   // attaches the servo on pin 18
 }
 
+
+void proceedUnlocking() {
+  Serial.println("Unlock the Door!");
+  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(ledPin, LOW);
+  if (useServo) unlockByServo();
+  if (useSolenoid) digitalWrite(solenoidPin, HIGH);
+  locked = false;
+  delay(5000);
+  /*if (useSolenoid) { //solenoid shouldn't be HIGH for more than 5 seconds. If needed, it will repeat the process.
+    digitalWrite(solenoidPin, LOW);
+    locked = true;
+  }*/
+}
+void proceedLocking() {
+  Serial.println("Lock the door");      
+  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(ledPin, HIGH); 
+  if (useServo)    lockByServo();  
+  if (useSolenoid) digitalWrite(solenoidPin, LOW);
+  locked = true;   
+}
+
 void loop() {
-// put your main code here, to run repeatedly:
 
 //Button control loops
-  buttonState = digitalRead(buttonPin);
+  buttonState = digitalRead(addKeyButtonPin);
   if (buttonState == HIGH) { //if pressed
+    Serial.println("Add key button pressed");
     if (deviceConnected) {
       addKey();    
+    }
+  }
+  buttonState = digitalRead(lockButtonPin);
+  if (buttonState == HIGH) {
+    if (locked) {
+      proceedUnlocking();      
+    }
+    else {
+      proceedLocking(); 
     }
   }
 
@@ -203,36 +251,19 @@ void loop() {
   
   for (int i = 0; i < foundDevices.getCount(); i++) {
     BLEAdvertisedDevice device = foundDevices.getDevice(i);
-    //int rssi = device.getRSSI();
-    //Serial.print("RSSI: ");
-    //Serial.println(rssi);
 
     //Proceed Unlocking
     if (/*rssi > RSSI_THRESHOLD &&*/ device_found == true && locked && doorClosed())   {
-      Serial.println("Unlock the Door!");
-      digitalWrite(LED_BUILTIN, HIGH);
-      digitalWrite(ledPin, LOW);
-      if (useServo) unlockByServo();
-      if (useSolenoid) digitalWrite(solenoidPin, HIGH);
-      locked = false;
-      delay(5000);
-      if (useSolenoid) { //solenoid shouldn't be HIGH for more than 5 seconds. If needed, it will repeat the process.
-        digitalWrite(solenoidPin, LOW);
-        locked = true;
-      }
+      proceedLocking();
+      break;   
     }
   }
   
   //Proceed Locking
   if (!device_found && !locked && doorClosed()) {
-      Serial.println("Lock the door");      
-      digitalWrite(LED_BUILTIN, LOW);
-      digitalWrite(ledPin, HIGH); 
-      if (useServo) 
-        lockByServo();  
-      digitalWrite(solenoidPin, LOW);
-      locked = true;   
+    proceedUnlocking();
   }
   delay(2000);
   pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
+
 }
