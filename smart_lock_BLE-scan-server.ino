@@ -62,7 +62,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
     Serial.print("Dispositivo BLE conectado com o MAC: ");
 		sprintf(
 			remoteAddress,
-			"%.2X:%.2X:%.2X:%.2X:%.2X:%.2X",
+			"%.2x:%.2x:%.2x:%.2x:%.2x:%.2x",
 			param->connect.remote_bda[0],
 			param->connect.remote_bda[1],
 			param->connect.remote_bda[2],
